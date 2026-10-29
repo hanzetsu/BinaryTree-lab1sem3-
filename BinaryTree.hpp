@@ -6,13 +6,15 @@
 #include "Sequence.hpp"
 #include "MutableListSequence.hpp"
 #include "Exceptions.hpp"
+#include "UniquePtr.hpp"
 
 template <typename T>
 struct TreeNode {
     T data;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(T val) : data(val), left(nullptr), right(nullptr) {}
+    UniquePtr<TreeNode<T>> left;
+    UniquePtr<TreeNode<T>> right;
+    
+    TreeNode(T val) : data(val) {}
 };
 
 template <typename T>
@@ -29,41 +31,36 @@ template <typename T, typename KeyExtractor = DefaultKeyExtractor<T>>
 requires KeyExtractorConcept<KeyExtractor, T>
 class BinaryTree {
 private:
-    TreeNode<T>* root;
+    UniquePtr<TreeNode<T>> root;
     KeyExtractor getKey;
 
-    void destroyTree(TreeNode<T>* node) {
-        if (node) {
-            destroyTree(node->left);
-            destroyTree(node->right);
-            delete node;
-        }
-    }
-
-    TreeNode<T>* copyTree(TreeNode<T>* node) const {
+    UniquePtr<TreeNode<T>> copyTree(const TreeNode<T>* node) const {
         if (!node) return nullptr;
-        TreeNode<T>* newNode = new TreeNode<T>(node->data);
-        newNode->left = copyTree(node->left);
-        newNode->right = copyTree(node->right);
+        
+        UniquePtr<TreeNode<T>> newNode(new TreeNode<T>(node->data));
+        newNode->left = copyTree(node->left.get());
+        newNode->right = copyTree(node->right.get());
         return newNode;
     }
 
-    TreeNode<T>* insertRec(TreeNode<T>* node, T val) {
-        if (!node) return new TreeNode<T>(val);
+    void insertRec(UniquePtr<TreeNode<T>>& node, T val) {
+        if (!node) {
+            node.reset(new TreeNode<T>(val));
+            return;
+        }
         
         auto valKey = getKey(val);
         auto nodeKey = getKey(node->data);
         
         if (valKey < nodeKey) {
-            node->left = insertRec(node->left, val);
+            insertRec(node->left, val);
         } else if (valKey > nodeKey) {
-            node->right = insertRec(node->right, val);
+            insertRec(node->right, val);
         }
-        return node;
     }
 
     template <typename Func>
-    void traverseRec(TreeNode<T>* node, Sequence<T>* seq, Func order) const {
+    void traverseRec(const UniquePtr<TreeNode<T>>& node, Sequence<T>* seq, Func order) const {
         if (!node) return;
 
         auto processRoot = [&]() { seq->Append(node->data); };
@@ -73,13 +70,13 @@ private:
         order(processRoot, goLeft, goRight);
     }
 
-    void printRec(std::ostream& os, TreeNode<T>* node, const std::string& prefix, bool isTail) const {
+    void printRec(std::ostream& os, const UniquePtr<TreeNode<T>>& node, const std::string& prefix, bool isTail) const {
         if (!node) return;
         
         os << prefix << (isTail ? "└── " : "├── ") << node->data << "\n";
         
-        bool hasLeft = (node->left != nullptr);
-        bool hasRight = (node->right != nullptr);
+        bool hasLeft = (node->left.get() != nullptr);
+        bool hasRight = (node->right.get() != nullptr);
         
         if (hasLeft) printRec(os, node->left, prefix + (isTail ? "    " : "│   "), !hasRight);
         if (hasRight) printRec(os, node->right, prefix + (isTail ? "    " : "│   "), true);
@@ -89,36 +86,33 @@ public:
     BinaryTree(KeyExtractor extractor = KeyExtractor()) : root(nullptr), getKey(extractor) {}
     
     BinaryTree(const BinaryTree& other) : root(nullptr), getKey(other.getKey) { 
-        root = copyTree(other.root); 
+        root = copyTree(other.root.get()); 
     }
     
     BinaryTree& operator=(const BinaryTree& other) {
         if (this != &other) {
-            destroyTree(root);
             getKey = other.getKey;
-            root = copyTree(other.root);
+            root = copyTree(other.root.get());
         }
         return *this;
     }
     
-    ~BinaryTree() { 
-        destroyTree(root); 
-    }
+    ~BinaryTree() = default;
 
     void insert(T val) { 
-        root = insertRec(root, val); 
+        insertRec(root, val); 
     }
 
     bool contains(T val) const {
-        TreeNode<T>* current = root;
+        const TreeNode<T>* current = root.get();
         auto valKey = getKey(val);
         
         while (current) {
             auto nodeKey = getKey(current->data);
             if (valKey == nodeKey) return true;
             
-            if (valKey < nodeKey) current = current->left;
-            else current = current->right;
+            if (valKey < nodeKey) current = current->left.get();
+            else current = current->right.get();
         }
         return false;
     }
@@ -134,9 +128,7 @@ public:
     auto map(Func func) const {
         using U = decltype(func(std::declval<T>()));
         BinaryTree<U>* newTree = new BinaryTree<U>();
-        
-        auto lkpOrder = [](auto root, auto left, auto right) { left(); root(); right(); };
-        Sequence<T>* elements = traverse(lkpOrder); 
+        Sequence<T>* elements = traverse(TraversalType::LKP); 
         
         for (size_t i = 0; i < elements->GetLength(); ++i) {
             newTree->insert(func(elements->Get(i))); 
@@ -148,9 +140,7 @@ public:
     template <typename Predicate>
     BinaryTree<T, KeyExtractor>* where(Predicate pred) const {
         BinaryTree<T, KeyExtractor>* newTree = new BinaryTree<T, KeyExtractor>(getKey);
-        
-        auto lkpOrder = [](auto root, auto left, auto right) { left(); root(); right(); };
-        Sequence<T>* elements = traverse(lkpOrder);
+        Sequence<T>* elements = traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
         
         for (size_t i = 0; i < elements->GetLength(); ++i) {
             if (pred(elements->Get(i))) {
@@ -162,17 +152,15 @@ public:
     }
 
     void merge(BinaryTree<T, KeyExtractor>* other) {
-        auto lkpOrder = [](auto root, auto left, auto right) { left(); root(); right(); };
-        Sequence<T>* elements = other->traverse(lkpOrder);
+        Sequence<T>* elements = other->traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
         for (size_t i = 0; i < elements->GetLength(); ++i) {
             insert(elements->Get(i));
         }
         delete elements;
     }
-
+    
     void clear() {
-        destroyTree(root);
-        root = nullptr;
+        root.reset();
     }
 
     friend std::ostream& operator<<(std::ostream& os, const BinaryTree& tree) {
@@ -182,8 +170,8 @@ public:
         }
         os << tree.root->data << "\n";
         
-        bool hasLeft = (tree.root->left != nullptr);
-        bool hasRight = (tree.root->right != nullptr);
+        bool hasLeft = (tree.root->left.get() != nullptr);
+        bool hasRight = (tree.root->right.get() != nullptr);
         
         if (hasLeft) tree.printRec(os, tree.root->left, "", !hasRight);
         if (hasRight) tree.printRec(os, tree.root->right, "", true);

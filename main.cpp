@@ -14,19 +14,13 @@ bool isEven(int x) { return x % 2 == 0; }
 int getIntInput(const string& prompt) {
     string input;
     int value;
-    
     while (true) {
         cout << prompt;
         getline(cin, input);
-        
         istringstream iss(input);
         char extra;
-        
-        if (iss >> value && !(iss >> extra)) {
-            return value;
-        } else {
-            cout << "Ошибка ввода! Пожалуйста, введите только целое число." << endl;
-        }
+        if (iss >> value && !(iss >> extra)) return value;
+        cout << "Ошибка ввода! Пожалуйста, введите только целое число." << endl;
     }
 }
 
@@ -36,7 +30,6 @@ void runBenchmark() {
     file << "N,Insert_Time_Sec,Traverse_Time_Sec\n";
 
     int sizes[] = {10000, 100000, 1000000};
-    
     auto klpOrder = [](auto root, auto left, auto right) { root(); left(); right(); };
     
     for (int n : sizes) {
@@ -62,7 +55,6 @@ void runBenchmark() {
         delete seq;
     }
     file.close();
-    cout << "\nДанные сохранены в benchmark.csv" << endl;
 }
 
 void printMenu() {
@@ -80,16 +72,10 @@ void printMenu() {
 
 int main() {
     BinaryTree<int> tree;
-    tree.insert(10);
-    tree.insert(5);
-    tree.insert(15);
-    tree.insert(3);
-    tree.insert(7);
-    tree.insert(12);
-    tree.insert(20);
+    tree.insert(10); tree.insert(5); tree.insert(15);
+    tree.insert(3); tree.insert(7); tree.insert(12); tree.insert(20);
     
     cout << "Дерево инициализировано начальными значениями." << endl;
-    
     int choice;
     
     do {
