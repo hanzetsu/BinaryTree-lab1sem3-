@@ -8,12 +8,19 @@ bool isEven(int x) { return x % 2 == 0; }
 struct Student {
     int id;
     std::string name;
+    Student(int i, std::string n) : id(i), name(n) {}
+};
 
-    Student(int i = 0, std::string n = "") : id(i), name(n) {}
+struct StudentIdComparator {
+    bool operator()(const Student& a, const Student& b) const {
+        return a.id < b.id;
+    }
+};
 
-    bool operator<(const Student& other) const { return id < other.id; }
-    bool operator>(const Student& other) const { return id > other.id; }
-    bool operator==(const Student& other) const { return id == other.id; }
+struct StudentNameComparator {
+    bool operator()(const Student& a, const Student& b) const {
+        return a.name < b.name;
+    }
 };
 
 TEST(BinaryTreeTest, EmptyTree) {
@@ -150,13 +157,20 @@ TEST(BinaryTreeTest, StringType) {
     EXPECT_FALSE(tree.contains("orange"));
 }
 
-TEST(BinaryTreeTest, CustomTypeStudent) {
-    BinaryTree<Student> tree;
+TEST(BinaryTreeTest, CustomComparatorStudentId) {
+    BinaryTree<Student, StudentIdComparator> tree;
     tree.insert(Student(3, "Alice"));
     tree.insert(Student(1, "Bob"));
-    tree.insert(Student(2, "Charlie"));
     
-    EXPECT_TRUE(tree.contains(Student(1, "Bob")));
-    EXPECT_TRUE(tree.contains(Student(3, "Alice")));
-    EXPECT_FALSE(tree.contains(Student(4, "Dave")));
+    EXPECT_TRUE(tree.contains(Student(1, "AnyName"))); 
+    EXPECT_FALSE(tree.contains(Student(2, "Bob")));
+}
+
+TEST(BinaryTreeTest, CustomComparatorStudentName) {
+    BinaryTree<Student, StudentNameComparator> tree;
+    tree.insert(Student(3, "Alice"));
+    tree.insert(Student(1, "Bob"));
+    
+    EXPECT_TRUE(tree.contains(Student(99, "Alice"))); 
+    EXPECT_FALSE(tree.contains(Student(1, "Charlie")));
 }
