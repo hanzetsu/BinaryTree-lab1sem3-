@@ -82,21 +82,16 @@ private:
         if (!node)
             return;
 
-        // Выводим префикс (линии) и данные узла
         std::cout << prefix << (isTail ? "└── " : "├── ") << node->data << "\n";
 
-        // Проверяем, есть ли дети
         bool hasLeft = (node->left != nullptr);
         bool hasRight = (node->right != nullptr);
 
-        // Если есть левый ребенок, идем в него.
-        // Он не последний, если у него есть брат (правый ребенок).
         if (hasLeft)
         {
             printRec(node->left, prefix + (isTail ? "    " : "│   "), !hasRight);
         }
 
-        // Если есть правый, он всегда последний.
         if (hasRight)
         {
             printRec(node->right, prefix + (isTail ? "    " : "│   "), true);
