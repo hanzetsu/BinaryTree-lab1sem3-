@@ -34,17 +34,20 @@ void runBenchmark() {
     
     for (int n : sizes) {
         cout << "\nТестирование " << n << " элементов..." << endl;
-        BinaryTree<int> tree;
+        BinaryTree<int, int> tree;
         mt19937 rng(42); 
         uniform_int_distribution<int> dist(1, 100000000);
 
         auto start = chrono::high_resolution_clock::now();
-        for (int i = 0; i < n; ++i) tree.insert(dist(rng));
+        for (int i = 0; i < n; ++i) {
+            int val = dist(rng);
+            tree.insert(val, val);
+        }
         auto end = chrono::high_resolution_clock::now();
         chrono::duration<double> insert_diff = end - start;
         
         start = chrono::high_resolution_clock::now();
-        Sequence<int>* seq = tree.traverse(klpOrder);
+        Sequence<KeyValue<int, int>>* seq = tree.traverse(klpOrder);
         end = chrono::high_resolution_clock::now();
         chrono::duration<double> traverse_diff = end - start;
         
@@ -71,9 +74,15 @@ void printMenu() {
 }
 
 int main() {
-    BinaryTree<int> tree;
-    tree.insert(10); tree.insert(5); tree.insert(15);
-    tree.insert(3); tree.insert(7); tree.insert(12); tree.insert(20);
+    BinaryTree<int, int> tree;
+    
+    tree.insert(10, 10); 
+    tree.insert(5, 5); 
+    tree.insert(15, 15);
+    tree.insert(3, 3); 
+    tree.insert(7, 7); 
+    tree.insert(12, 12); 
+    tree.insert(20, 20);
     
     cout << "Дерево инициализировано начальными значениями." << endl;
     int choice;
@@ -86,12 +95,12 @@ int main() {
             switch (choice) {
                 case 1: {
                     int val = getIntInput("Введите число: ");
-                    tree.insert(val);
+                    tree.insert(val, val);
                     cout << "Добавлено." << endl;
                     break;
                 }
                 case 2: {
-                    int val = getIntInput("Введите число: ");
+                    int val = getIntInput("Введите число для поиска: ");
                     cout << (tree.contains(val) ? "Есть в дереве" : "Не найдено") << endl;
                     break;
                 }
@@ -101,22 +110,24 @@ int main() {
                     break;
                 case 4: {
                     auto klpOrder = [](auto root, auto left, auto right) { root(); left(); right(); };
-                    Sequence<int>* seq = tree.traverse(klpOrder);
+                    Sequence<KeyValue<int, int>>* seq = tree.traverse(klpOrder);
                     cout << "КЛП: ";
-                    for (size_t i = 0; i < seq->GetLength(); ++i) cout << seq->Get(i) << " ";
+                    for (size_t i = 0; i < seq->GetLength(); ++i) {
+                        cout << seq->Get(i).value << " ";
+                    }
                     cout << endl;
                     delete seq;
                     break;
                 }
                 case 5: {
-                    BinaryTree<int>* mappedTree = tree.map(doubleVal);
+                    BinaryTree<int, int>* mappedTree = tree.map(doubleVal);
                     cout << "Дерево после map:" << endl;
                     cout << *mappedTree << endl;
                     delete mappedTree;
                     break;
                 }
                 case 6: {
-                    BinaryTree<int>* filteredTree = tree.where(isEven);
+                    BinaryTree<int, int>* filteredTree = tree.where(isEven);
                     cout << "Дерево после where:" << endl;
                     cout << *filteredTree << endl;
                     delete filteredTree;

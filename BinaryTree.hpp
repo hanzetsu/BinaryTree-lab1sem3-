@@ -8,72 +8,66 @@
 #include "Exceptions.hpp"
 #include "UniquePtr.hpp"
 
-template <typename T>
+template <typename K, typename V>
 struct TreeNode {
-    T data;
-    UniquePtr<TreeNode<T>> left;
-    UniquePtr<TreeNode<T>> right;
+    K key;
+    V value;
+    UniquePtr<TreeNode<K, V>> left;
+    UniquePtr<TreeNode<K, V>> right;
     
-    TreeNode(T val) : data(val) {}
+    TreeNode(K k, V v) : key(k), value(v) {}
 };
 
-template <typename T>
-struct DefaultKeyExtractor {
-    T operator()(const T& item) const { return item; }
+template <typename K, typename V>
+struct KeyValue {
+    K key;
+    V value;
 };
 
-template <typename E, typename T>
-concept KeyExtractorConcept = requires(E extractor, T item) {
-    extractor(item); 
-};
-
-template <typename T, typename KeyExtractor = DefaultKeyExtractor<T>>
-requires KeyExtractorConcept<KeyExtractor, T>
+template <typename K, typename V>
 class BinaryTree {
 private:
-    UniquePtr<TreeNode<T>> root;
-    KeyExtractor getKey;
+    UniquePtr<TreeNode<K, V>> root;
 
-    UniquePtr<TreeNode<T>> copyTree(const TreeNode<T>* node) const {
+    UniquePtr<TreeNode<K, V>> copyTree(const TreeNode<K, V>* node) const {
         if (!node) return nullptr;
         
-        UniquePtr<TreeNode<T>> newNode(new TreeNode<T>(node->data));
+        UniquePtr<TreeNode<K, V>> newNode(new TreeNode<K, V>(node->key, node->value));
         newNode->left = copyTree(node->left.get());
         newNode->right = copyTree(node->right.get());
         return newNode;
     }
 
-    void insertRec(UniquePtr<TreeNode<T>>& node, T val) {
+    void insertRec(UniquePtr<TreeNode<K, V>>& node, K key, V value) {
         if (!node.get()) {
-            node.reset(new TreeNode<T>(val));
+            node.reset(new TreeNode<K, V>(key, value));
             return;
         }
         
-        auto valKey = getKey(val);
-        auto nodeKey = getKey(node->data);
-        
-        if (valKey < nodeKey) {
-            insertRec(node->left, val);
-        } else if (valKey > nodeKey) {
-            insertRec(node->right, val);
+        if (key < node->key) {
+            insertRec(node->left, key, value);
+        } else if (key > node->key) {
+            insertRec(node->right, key, value);
+        } else {
+            node->value = value;
         }
     }
 
     template <typename Func>
-    void traverseRec(const UniquePtr<TreeNode<T>>& node, Sequence<T>* seq, Func order) const {
+    void traverseRec(const UniquePtr<TreeNode<K, V>>& node, Sequence<KeyValue<K, V>>* seq, Func order) const {
         if (!node.get()) return;
 
-        auto processRoot = [&]() { seq->Append(node->data); };
+        auto processRoot = [&]() { seq->Append(KeyValue<K, V>{node->key, node->value}); };
         auto goLeft = [&]() { traverseRec(node->left, seq, order); };
         auto goRight = [&]() { traverseRec(node->right, seq, order); };
 
         order(processRoot, goLeft, goRight);
     }
 
-    void printRec(std::ostream& os, const UniquePtr<TreeNode<T>>& node, const std::string& prefix, bool isTail) const {
+    void printRec(std::ostream& os, const UniquePtr<TreeNode<K, V>>& node, const std::string& prefix, bool isTail) const {
         if (!node.get()) return;
         
-        os << prefix << (isTail ? "└── " : "├── ") << node->data << "\n";
+        os << prefix << (isTail ? "└── " : "├── ") << node->key << " : " << node->value << "\n";
         
         bool hasLeft = (node->left.get() != nullptr);
         bool hasRight = (node->right.get() != nullptr);
@@ -83,15 +77,14 @@ private:
     }
 
 public:
-    BinaryTree(KeyExtractor extractor = KeyExtractor()) : root(nullptr), getKey(extractor) {}
+    BinaryTree() : root(nullptr) {}
     
-    BinaryTree(const BinaryTree& other) : root(nullptr), getKey(other.getKey) { 
+    BinaryTree(const BinaryTree& other) : root(nullptr) { 
         root = copyTree(other.root.get()); 
     }
     
     BinaryTree& operator=(const BinaryTree& other) {
         if (this != &other) {
-            getKey = other.getKey;
             root = copyTree(other.root.get());
         }
         return *this;
@@ -99,62 +92,63 @@ public:
     
     ~BinaryTree() = default;
 
-    void insert(T val) { 
-        insertRec(root, val);
+    void insert(K key, V value) { 
+        insertRec(root, key, value);
     }
 
-    bool contains(T val) const {
-        const TreeNode<T>* current = root.get();
-        auto valKey = getKey(val);
-        
+    bool contains(K key) const {
+        const TreeNode<K, V>* current = root.get();
         while (current) {
-            auto nodeKey = getKey(current->data);
-            if (valKey == nodeKey) return true;
+            if (key == current->key) return true;
             
-            if (valKey < nodeKey) current = current->left.get();
+            if (key < current->key) current = current->left.get();
             else current = current->right.get();
         }
         return false;
     }
 
     template <typename Func>
-    Sequence<T>* traverse(Func order) const {
-        Sequence<T>* seq = new MutableListSequence<T>();
+    Sequence<KeyValue<K, V>>* traverse(Func order) const {
+        Sequence<KeyValue<K, V>>* seq = new MutableListSequence<KeyValue<K, V>>();
         traverseRec(root, seq, order);
         return seq;
     }
 
     template <typename Func>
     auto map(Func func) const {
-        using U = decltype(func(std::declval<T>()));
-        BinaryTree<U>* newTree = new BinaryTree<U>();
+        using U = decltype(func(std::declval<V>()));
+        BinaryTree<K, U>* newTree = new BinaryTree<K, U>();
         auto klpOrder = [](auto root, auto left, auto right) { root(); left(); right(); };
-        Sequence<T>* elements = traverse(klpOrder);
+        Sequence<KeyValue<K, V>>* elements = traverse(klpOrder);
+        
         for (size_t i = 0; i < elements->GetLength(); ++i) {
-            newTree->insert(func(elements->Get(i))); 
+            auto kv = elements->Get(i);
+            newTree->insert(kv.key, func(kv.value)); 
         }
         delete elements;
         return newTree;
     }
 
     template <typename Predicate>
-    BinaryTree<T, KeyExtractor>* where(Predicate pred) const {
-        BinaryTree<T, KeyExtractor>* newTree = new BinaryTree<T, KeyExtractor>(getKey);
-        Sequence<T>* elements = traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
+    BinaryTree<K, V>* where(Predicate pred) const {
+        BinaryTree<K, V>* newTree = new BinaryTree<K, V>();
+        Sequence<KeyValue<K, V>>* elements = traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
         
         for (size_t i = 0; i < elements->GetLength(); ++i) {
-            if (pred(elements->Get(i))) {
-                newTree->insert(elements->Get(i));
+            auto kv = elements->Get(i);
+            if (pred(kv.value)) {
+                newTree->insert(kv.key, kv.value);
             }
         }
         delete elements;
         return newTree;
     }
 
-    void merge(BinaryTree<T, KeyExtractor>* other) {
-        Sequence<T>* elements = other->traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
+    void merge(BinaryTree<K, V>* other) {
+        Sequence<KeyValue<K, V>>* elements = other->traverse([](auto r, auto l, auto rr){ l(); r(); rr(); });
         for (size_t i = 0; i < elements->GetLength(); ++i) {
-            insert(elements->Get(i));
+            auto kv = elements->Get(i);
+            insert(kv.key, kv.value);
         }
         delete elements;
     }
@@ -168,7 +162,7 @@ public:
             os << "(Дерево пусто)";
             return os;
         }
-        os << tree.root->data << "\n";
+        os << tree.root->key << " : " << tree.root->value << "\n";
         
         bool hasLeft = (tree.root->left.get() != nullptr);
         bool hasRight = (tree.root->right.get() != nullptr);
