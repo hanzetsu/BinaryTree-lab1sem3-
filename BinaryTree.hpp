@@ -44,7 +44,7 @@ private:
     }
 
     void insertRec(UniquePtr<TreeNode<T>>& node, T val) {
-        if (!node) {
+        if (!node.get()) {
             node.reset(new TreeNode<T>(val));
             return;
         }
@@ -61,7 +61,7 @@ private:
 
     template <typename Func>
     void traverseRec(const UniquePtr<TreeNode<T>>& node, Sequence<T>* seq, Func order) const {
-        if (!node) return;
+        if (!node.get()) return;
 
         auto processRoot = [&]() { seq->Append(node->data); };
         auto goLeft = [&]() { traverseRec(node->left, seq, order); };
@@ -71,7 +71,7 @@ private:
     }
 
     void printRec(std::ostream& os, const UniquePtr<TreeNode<T>>& node, const std::string& prefix, bool isTail) const {
-        if (!node) return;
+        if (!node.get()) return;
         
         os << prefix << (isTail ? "└── " : "├── ") << node->data << "\n";
         
@@ -100,7 +100,7 @@ public:
     ~BinaryTree() = default;
 
     void insert(T val) { 
-        insertRec(root, val); 
+        insertRec(root, val);
     }
 
     bool contains(T val) const {
@@ -128,8 +128,8 @@ public:
     auto map(Func func) const {
         using U = decltype(func(std::declval<T>()));
         BinaryTree<U>* newTree = new BinaryTree<U>();
-        Sequence<T>* elements = traverse(TraversalType::LKP); 
-        
+        auto klpOrder = [](auto root, auto left, auto right) { root(); left(); right(); };
+        Sequence<T>* elements = traverse(klpOrder);
         for (size_t i = 0; i < elements->GetLength(); ++i) {
             newTree->insert(func(elements->Get(i))); 
         }
@@ -164,7 +164,7 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& os, const BinaryTree& tree) {
-        if (!tree.root) {
+        if (!tree.root.get()) {
             os << "(Дерево пусто)";
             return os;
         }
