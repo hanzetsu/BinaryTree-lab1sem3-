@@ -67,7 +67,7 @@ private:
     void printRec(std::ostream& os, const UniquePtr<TreeNode<K, V>>& node, const std::string& prefix, bool isTail) const {
         if (!node.get()) return;
         
-        os << prefix << (isTail ? "└── " : "├── ") << node->key << " : " << node->value << "\n";
+        os << prefix << (isTail ? "└── " : "├── ") << node->value << "\n";
         
         bool hasLeft = (node->left.get() != nullptr);
         bool hasRight = (node->right.get() != nullptr);
@@ -162,7 +162,7 @@ public:
             os << "(Дерево пусто)";
             return os;
         }
-        os << tree.root->key << " : " << tree.root->value << "\n";
+        os << tree.root->value << "\n";
         
         bool hasLeft = (tree.root->left.get() != nullptr);
         bool hasRight = (tree.root->right.get() != nullptr);
